@@ -2,7 +2,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "../../../../lib/api";
-import { BRAND, FACILITATOR_URL } from "../../../../lib/brand";
+import { FACILITATOR_URL } from "../../../../lib/brand";
+import { Header, KeyReveal, Copy } from "../../../../components/ui";
 
 export default function NewService() {
   const [name, setName] = useState("");
@@ -17,6 +18,7 @@ export default function NewService() {
     try { setCreated(await api.createService(name, xpub.trim(), Math.round(feePct * 100))); }
     catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
+
   const snippet = created && `import { requirePayment } from "os-x402/sdk";
 
 app.get("/your/endpoint",
@@ -30,20 +32,19 @@ app.get("/your/endpoint",
 
   return (
     <div className="container" style={{ maxWidth: 720 }}>
-      <nav className="nav"><Link className="brand" href="/dashboard"><span className="dot" />{BRAND.name}</Link>
-        <Link className="btn" href="/dashboard">← Dashboard</Link></nav>
+      <Header back={{ href: "/dashboard", label: "← Dashboard" }} />
 
       {!created ? (
         <div className="card" style={{ marginTop: 24 }}>
           <h2 style={{ marginTop: 0 }}>New service</h2>
-          <p className="muted">Paste your own Fractal <b>account xpub</b>. {BRAND.name} derives a fresh receive address per
-            request — payments go straight to your wallet. We never hold your funds or keys.</p>
+          <p className="muted">Paste your own Fractal <b>account xpub</b>. We derive a fresh receive address per
+            request — payments go straight to your wallet. The facilitator never holds your funds or keys.</p>
           <form onSubmit={submit}>
             <label>Service name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My AI API" required />
             <label>Your FB account xpub</label>
             <input value={xpub} onChange={(e) => setXpub(e.target.value)} placeholder="xpub6…" required />
-            <label>Facilitator fee: {feePct}%</label>
+            <label>Facilitator fee — {feePct}% per call</label>
             <input type="range" min={0} max={20} step={0.5} value={feePct} onChange={(e) => setFeePct(Number(e.target.value))} />
             {err && <div className="err">{err}</div>}
             <button className="btn btn-primary" style={{ marginTop: 18 }} disabled={busy}>{busy ? "Creating…" : "Create service"}</button>
@@ -52,12 +53,11 @@ app.get("/your/endpoint",
       ) : (
         <div className="card" style={{ marginTop: 24 }}>
           <h2 style={{ marginTop: 0 }} className="ok">✓ Service created</h2>
-          <label>Service API key (keep it secret)</label>
-          <div className="row"><code style={{ wordBreak: "break-all" }}>{created.api_key}</code>
-            <span className="copy" onClick={() => navigator.clipboard.writeText(created.api_key)}>Copy</span></div>
-          <label style={{ marginTop: 20 }}>Drop this into your server</label>
-          <pre>{snippet}</pre>
-          <span className="copy" onClick={() => navigator.clipboard.writeText(snippet!)}>Copy snippet</span>
+          <div className="label">Service API key</div>
+          <KeyReveal value={created.api_key} />
+          <div className="label" style={{ marginTop: 22, marginBottom: 8 }}>Drop this into your server</div>
+          <pre style={{ marginBottom: 8 }}>{snippet}</pre>
+          <Copy text={snippet!} label="Copy snippet" />
           <div style={{ marginTop: 22 }}><Link className="btn btn-primary" href="/dashboard">Go to dashboard →</Link></div>
         </div>
       )}

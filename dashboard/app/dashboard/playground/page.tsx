@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { payAndFetch } from "../../../lib/wallet";
-import { BRAND } from "../../../lib/brand";
+import { Header, Copy } from "../../../components/ui";
 
 const API = "http://127.0.0.1:4055";
 const SAMPLE_ADDR = "bc1qe3m0nc5pytuaktg8tjy4ltwrket3e9h426yu9v";
@@ -38,8 +37,7 @@ export default function Playground() {
 
   return (
     <div className="container" style={{ maxWidth: 760 }}>
-      <nav className="nav"><Link className="brand" href="/dashboard"><span className="dot" />{BRAND.name}</Link>
-        <Link className="btn" href="/dashboard">← Dashboard</Link></nav>
+      <Header back={{ href: "/dashboard", label: "← Dashboard" }} />
       <div className="card" style={{ marginTop: 24 }}>
         <h2 style={{ marginTop: 0 }}>Playground</h2>
         <p className="muted">Pick a tool, or paste any x402 endpoint. Your connected UniSat wallet builds a
@@ -65,7 +63,10 @@ export default function Playground() {
         </button>
         {err && <div className="err">{err}</div>}
         {out && <>
-          <label style={{ marginTop: 20 }}>Result {out.txid && <span className="ok">· paid {out.paid} sats (fee {out.fee}) · tx {String(out.txid).slice(0, 12)}…</span>}</label>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginTop: 22, marginBottom: 6 }}>
+            <span className="label" style={{ margin: 0 }}>Result</span>
+            {out.txid && <span className="badge paid">paid {out.paid} sat · fee {out.fee} · <Copy text={out.txid} label={"tx " + String(out.txid).slice(0, 10) + "…"} /></span>}
+          </div>
           <pre>{JSON.stringify(out.data, null, 2)}</pre>
         </>}
       </div>

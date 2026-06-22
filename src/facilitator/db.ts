@@ -38,8 +38,10 @@ export async function initDb() {
       fee_address text not null,
       status text not null default 'pending',
       txid text,
+      payer text,                          -- payer address, when known (for unique-buyer analytics)
       created_at timestamptz default now(),
       paid_at timestamptz
     );
+    alter table payments add column if not exists payer text;
   `);
 }

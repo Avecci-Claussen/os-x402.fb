@@ -59,6 +59,31 @@ export const listServices = async (merchantId: string) =>
 const serviceByApiKey = async (apiKey: string) =>
   (await pool.query(`select * from services where api_key_hash=$1`, [hashKey(apiKey)])).rows[0];
 
+// --- API key management (owner-scoped) ---
+async function ownedService(merchantId: string, serviceId: string) {
+  const s = (await pool.query(`select * from services where id=$1 and merchant_id=$2`, [serviceId, merchantId])).rows[0];
+  if (!s) throw new Error("service not found");
+  return s;
+}
+export async function getService(merchantId: string, serviceId: string) {
+  const s = await ownedService(merchantId, serviceId);
+  return { id: s.id, name: s.name, xpub: s.xpub, fee_bps: s.fee_bps, api_key_prefix: s.api_key_prefix, deriv_index: s.deriv_index, created_at: s.created_at };
+}
+// Rotate: old key stops working immediately; new raw key returned ONCE.
+export async function regenerateServiceKey(merchantId: string, serviceId: string) {
+  await ownedService(merchantId, serviceId);
+  const apiKey = "ssk_" + crypto.randomBytes(24).toString("hex");
+  const prefix = apiKey.slice(0, 12);
+  await pool.query(`update services set api_key_hash=$1, api_key_prefix=$2 where id=$3 and merchant_id=$4`,
+    [hashKey(apiKey), prefix, serviceId, merchantId]);
+  return { api_key: apiKey, api_key_prefix: prefix };
+}
+export async function deleteService(merchantId: string, serviceId: string) {
+  await ownedService(merchantId, serviceId);
+  await pool.query(`delete from services where id=$1 and merchant_id=$2`, [serviceId, merchantId]);
+  return { ok: true };
+}
+
 export async function createRequirement(apiKey: string, resource: string, price: number): Promise<PaymentRequirements> {
   const svc = await serviceByApiKey(apiKey);
   if (!svc) throw new Error("invalid service api key");
@@ -84,12 +109,13 @@ export async function buildPayment(nonce: string, payerAddress: string) {
   const p = (await pool.query(`select * from payments where nonce=$1`, [nonce])).rows[0];
   if (!p) throw new Error("unknown nonce");
   if (!payerAddress) throw new Error("payerAddress required");
+  await pool.query(`update payments set payer=$1 where nonce=$2 and payer is null`, [payerAddress, nonce]);
   const feeRate = Number(process.env.FEE_RATE_SAT_VB || "4");
   const psbtHex = await buildUnsignedPsbtHex(payerAddress, p.pay_to, Number(p.amount), p.fee_address, Number(p.fee_amount), feeRate);
   return { psbtHex };
 }
 
-export async function verifyPayment(apiKey: string, nonce: string, txid: string) {
+export async function verifyPayment(apiKey: string, nonce: string, txid: string, payer?: string) {
   const svc = await serviceByApiKey(apiKey);
   if (!svc) throw new Error("invalid service api key");
   const p = (await pool.query(`select * from payments where nonce=$1 and service_id=$2`, [nonce, svc.id])).rows[0];
@@ -100,7 +126,8 @@ export async function verifyPayment(apiKey: string, nonce: string, txid: string)
   const merchantPaid = outs.some((o) => o.address === p.pay_to && o.satoshi >= Number(p.amount));
   const feePaid = outs.some((o) => o.address === p.fee_address && o.satoshi >= Number(p.fee_amount));
   if (!merchantPaid || !feePaid) return { ok: false, status: "invalid" };
-  await pool.query(`update payments set status='paid', txid=$1, paid_at=now() where id=$2`, [txid, p.id]);
+  await pool.query(`update payments set status='paid', txid=$1, paid_at=now(), payer=coalesce(payer,$3) where id=$2`,
+    [txid, p.id, payer || null]);
   return { ok: true, status: "paid", txid };
 }
 
@@ -109,6 +136,26 @@ export const stats = async (merchantId: string) => (await pool.query(`
          coalesce(sum(p.amount) filter (where p.status='paid'),0)::bigint as earned_to_merchant,
          coalesce(sum(p.fee_amount) filter (where p.status='paid'),0)::bigint as facilitator_fees
   from payments p join services s on s.id=p.service_id where s.merchant_id=$1`, [merchantId])).rows[0];
+
+// A merchant's own last-30-days, real numbers.
+export const stats30d = async (merchantId: string) => (await pool.query(`
+  select count(*)::int as transactions,
+         coalesce(sum(p.amount),0)::bigint as volume,
+         count(distinct p.payer)::int as buyers,
+         count(distinct p.service_id)::int as services
+  from payments p join services s on s.id=p.service_id
+  where s.merchant_id=$1 and p.status='paid' and p.paid_at > now() - interval '30 days'`, [merchantId])).rows[0];
+
+// Ecosystem-wide last-30-days aggregate (all merchants) — real on-chain totals, no fabrication.
+// Public marketing-style stats (like the x402.org homepage), computed from settled payments.
+export const ecosystemStats = async () => (await pool.query(`
+  select count(*)::int as transactions,
+         coalesce(sum(p.amount),0)::bigint as volume,
+         coalesce(sum(p.fee_amount),0)::bigint as fees,
+         count(distinct p.payer)::int as buyers,
+         count(distinct s.merchant_id)::int as sellers
+  from payments p join services s on s.id=p.service_id
+  where p.status='paid' and p.paid_at > now() - interval '30 days'`)).rows[0];
 export const servicePayments = async (merchantId: string, serviceId: string) => (await pool.query(
   `select p.* from payments p join services s on s.id=p.service_id
    where s.merchant_id=$1 and p.service_id=$2 order by p.created_at desc limit 50`, [merchantId, serviceId])).rows;

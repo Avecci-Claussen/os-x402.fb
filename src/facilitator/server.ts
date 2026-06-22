@@ -30,13 +30,19 @@ export async function buildFacilitator() {
   app.post("/v1/auth/wallet", wrap((req) => svc.walletLogin(req.body.address, req.body.signature)));
   app.post("/v1/services", auth, wrap((req) => svc.createService(mid(req), req.body.name, req.body.xpub, req.body.feeBps)));
   app.get("/v1/services", auth, wrap((req) => svc.listServices(mid(req))));
+  app.get("/v1/services/:id", auth, wrap((req) => svc.getService(mid(req), req.params.id)));
+  app.post("/v1/services/:id/regenerate-key", auth, wrap((req) => svc.regenerateServiceKey(mid(req), req.params.id)));
+  app.delete("/v1/services/:id", auth, wrap((req) => svc.deleteService(mid(req), req.params.id)));
   app.get("/v1/services/:id/payments", auth, wrap((req) => svc.servicePayments(mid(req), req.params.id)));
   app.get("/v1/stats", auth, wrap((req) => svc.stats(mid(req))));
+  app.get("/v1/stats/30d", auth, wrap((req) => svc.stats30d(mid(req))));
   app.get("/v1/usage", auth, wrap((req) => svc.usage(mid(req))));
+  // public, real ecosystem totals (last 30 days) — marketing/analytics, computed from settled payments
+  app.get("/v1/ecosystem", wrap(() => svc.ecosystemStats()));
 
   // --- Merchant-server integration (service API key) ---
   app.post("/v1/requirements", wrap((req) => svc.createRequirement(apiKey(req), req.body.resource, req.body.price)));
-  app.post("/v1/verify", wrap((req) => svc.verifyPayment(apiKey(req), req.body.nonce, req.body.txid)));
+  app.post("/v1/verify", wrap((req) => svc.verifyPayment(apiKey(req), req.body.nonce, req.body.txid, req.body.payer)));
   // browser wallet: build an unsigned PSBT to sign with UniSat (keeps the UniSat key server-side)
   app.post("/v1/build-payment", wrap((req) => svc.buildPayment(req.body.nonce, req.body.payerAddress)));
 
