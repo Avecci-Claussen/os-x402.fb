@@ -23,7 +23,8 @@ export async function initDb() {
       xpub text not null,
       deriv_index int not null default 0,
       fee_bps int not null default 1000,
-      api_key text unique not null,
+      api_key_hash text unique not null,   -- only the SHA-256 hash is stored, never the raw key
+      api_key_prefix text not null,        -- first chars, for display only (e.g. ssk_b946b248)
       created_at timestamptz default now()
     );
     create table if not exists payments (

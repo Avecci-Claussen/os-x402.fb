@@ -62,7 +62,7 @@ export default function Dashboard() {
                 <td>{s.name}</td>
                 <td>{(s.fee_bps / 100).toFixed(1)}%</td>
                 <td>{s.deriv_index}</td>
-                <td><code>{s.api_key.slice(0, 12)}…</code></td>
+                <td><code>{s.api_key_prefix}…</code></td>
                 <td><Link className="amber" href={`/dashboard/services/${s.id}`}>View →</Link></td>
               </tr>
             ))}</tbody></table>

@@ -12,12 +12,16 @@ import { buildUnsignedPsbtHex, type PaymentRequirements } from "../core/scheme.j
 const sign = (merchantId: string) => jwt.sign({ merchantId }, cfg.jwtSecret, { expiresIn: "7d" });
 export const verifyToken = (token: string): string => (jwt.verify(token, cfg.jwtSecret) as any).merchantId;
 
+// Service API keys are stored ONLY as a SHA-256 hash (like a password). The raw key is shown once at
+// creation and never persisted — a DB dump leaks no usable keys.
+const hashKey = (k: string) => crypto.createHash("sha256").update(k).digest("hex");
+
 // --- Wallet sign-in (UniSat): connect -> sign a challenge -> verify signature -> JWT. No passwords. ---
 export async function challenge(address: string) {
   if (!address) throw new Error("address required");
   const nonce = crypto.randomBytes(12).toString("hex");
   const message =
-    `Turnpike login\naddress: ${address}\nnonce: ${nonce}\nissued: ${new Date().toISOString()}`;
+    `x402.fb login\naddress: ${address}\nnonce: ${nonce}\nissued: ${new Date().toISOString()}`;
   await pool.query(`delete from auth_challenges where address=$1 or expires_at < now()`, [address]);
   await pool.query(`insert into auth_challenges(address,message,expires_at) values($1,$2, now() + interval '10 minutes')`,
     [address, message]);
@@ -43,16 +47,17 @@ export async function walletLogin(address: string, signature: string) {
 export async function createService(merchantId: string, name: string, xpub: string, feeBps = 1000) {
   if (!name || !xpub) throw new Error("name and xpub required");
   const apiKey = "ssk_" + crypto.randomBytes(24).toString("hex");
+  const prefix = apiKey.slice(0, 12);
   const r = await pool.query(
-    `insert into services(merchant_id,name,xpub,fee_bps,api_key)
-     values($1,$2,$3,$4,$5) returning id,name,xpub,fee_bps,api_key,deriv_index,created_at`,
-    [merchantId, name, xpub, feeBps, apiKey]);
-  return r.rows[0];
+    `insert into services(merchant_id,name,xpub,fee_bps,api_key_hash,api_key_prefix)
+     values($1,$2,$3,$4,$5,$6) returning id,name,xpub,fee_bps,api_key_prefix,deriv_index,created_at`,
+    [merchantId, name, xpub, feeBps, hashKey(apiKey), prefix]);
+  return { ...r.rows[0], api_key: apiKey }; // raw key returned ONCE, never stored
 }
 export const listServices = async (merchantId: string) =>
-  (await pool.query(`select id,name,xpub,fee_bps,api_key,deriv_index,created_at from services where merchant_id=$1 order by created_at desc`, [merchantId])).rows;
+  (await pool.query(`select id,name,xpub,fee_bps,api_key_prefix,deriv_index,created_at from services where merchant_id=$1 order by created_at desc`, [merchantId])).rows;
 const serviceByApiKey = async (apiKey: string) =>
-  (await pool.query(`select * from services where api_key=$1`, [apiKey])).rows[0];
+  (await pool.query(`select * from services where api_key_hash=$1`, [hashKey(apiKey)])).rows[0];
 
 export async function createRequirement(apiKey: string, resource: string, price: number): Promise<PaymentRequirements> {
   const svc = await serviceByApiKey(apiKey);

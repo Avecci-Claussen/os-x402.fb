@@ -1,19 +1,10 @@
-// x402 "fb-exact" scheme types + the payer-side 2-output transaction builder.
+// x402 "fb-exact" scheme: the payer-side 2-output transaction builder.
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPair, FB_NETWORK } from "./fb.js";
 import { getCardinalUtxos, broadcast } from "./unisat.js";
+import type { PaymentRequirements } from "./types.js";
 
-export interface PaymentRequirements {
-  scheme: "fb-exact";
-  asset: "FB";
-  network: "fractal-mainnet";
-  payTo: string;
-  amount: number;
-  facilitatorFee: { payTo: string; amount: number };
-  resource: string;
-  nonce: string;
-  expiresAt: number;
-}
+export type { PaymentRequirements } from "./types.js";
 
 const DUST = 330;
 

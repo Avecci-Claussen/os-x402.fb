@@ -51,3 +51,50 @@ export async function getTxDetail(txid: string) {
   const r = await http.get(`/v1/indexer/tx/${txid}`);
   return r.data?.data ?? null;
 }
+
+// Inscriptions/ordinals held by an address (count + a sample).
+export async function getInscriptionSummary(address: string) {
+  const r = await http.get(`/v1/indexer/address/${address}/inscription-data`, { params: { cursor: 0, size: 5 } });
+  const d = r.data?.data ?? {};
+  return {
+    address,
+    totalInscriptions: Number(d.total || 0),
+    confirmed: Number(d.totalConfirmed || 0),
+    unconfirmed: Number(d.totalUnconfirmed || 0),
+    sample: (d.inscription ?? []).map((i: any) => ({
+      inscriptionId: i.inscriptions?.[0]?.inscriptionId, txid: i.utxo?.txid, sats: i.utxo?.satoshi,
+    })),
+  };
+}
+
+// BRC-20 token balances for an address.
+export async function getBrc20Summary(address: string) {
+  const r = await http.get(`/v1/indexer/address/${address}/brc20/summary`, { params: { cursor: 0, size: 40 } });
+  const d = r.data?.data ?? {};
+  return {
+    address,
+    height: Number(d.height || 0),
+    tokenCount: Number(d.total || 0),
+    tokens: (d.detail ?? []).map((t: any) => ({
+      ticker: t.ticker, overall: t.overallBalance, transferable: t.transferableBalance, available: t.availableBalance,
+    })),
+  };
+}
+
+// Runes balances for an address.
+export async function getRunesBalances(address: string) {
+  const r = await http.get(`/v1/indexer/address/${address}/runes/balance-list`, { params: { cursor: 0, size: 40 } });
+  const d = r.data?.data ?? {};
+  return {
+    address,
+    runeCount: Number(d.total || 0),
+    runes: (d.detail ?? []).map((x: any) => ({ rune: x.spacedRune || x.rune, amount: x.amount, divisibility: x.divisibility })),
+  };
+}
+
+// Fractal chain tip / network status.
+export async function getChainInfo() {
+  const r = await http.get(`/v1/indexer/blockchain/info`);
+  const d = r.data?.data ?? {};
+  return { chain: d.chain, blocks: Number(d.blocks || 0), bestBlockHash: d.bestBlockHash, medianTime: Number(d.medianTime || 0) };
+}

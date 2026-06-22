@@ -51,37 +51,51 @@ agent ──GET──▶  requirePayment() middleware (SDK, API key only)│
 **Provider integration (header `x-api-key`):**
 `POST /v1/requirements {resource,price}` → payment requirements · `POST /v1/verify {nonce,txid}` → status
 
-## Run locally
+## Integrate as a provider (the SDK)
 ```bash
-cp .env.example .env          # UNISAT_API_KEY, FEE_ADDRESS, JWT_SECRET (+ PAYER_WIF for the e2e test)
+npm install os-x402
+```
+```ts
+import { requirePayment } from "os-x402/sdk";
+
+app.get("/v1/inference",
+  requirePayment({ facilitatorUrl: "https://x402.fb", apiKey: process.env.SVC_KEY!, price: 10_000 }),
+  (req, res) => res.json({ out: model(req) }),   // only runs after payment is verified on-chain
+);
+```
+That's the whole integration — no keys, no node, no DB on your side. (Publishing the SDK:
+[`PUBLISHING.md`](PUBLISHING.md).)
+
+## Run the full stack locally
+```bash
+cp .env.example .env          # UNISAT_API_KEY, FEE_ADDRESS, JWT_SECRET (+ PAYER_WIF for paying demos)
 npm install
 docker run -d --name x402-pg -p 127.0.0.1:5434:5432 \
   -e POSTGRES_USER=x402 -e POSTGRES_PASSWORD=x402 -e POSTGRES_DB=x402 postgres:16
-npm run e2e                   # full SaaS flow incl. a real, tiny mainnet FB payment
-npm run facilitator           # run the service on :4040
+npm run dev-stack             # facilitator :4040 + demo "Fractal Tools API" :4055
 ```
 
-## Deploy
+## See the value (autonomous agent pays for what it needs)
+```bash
+# an agent answers a question by BUYING on-chain data via x402, then reasoning with a model
+# (free local Ollama by default; Claude if ANTHROPIC_API_KEY is set). Spends a little real FB.
+npm run agent:demo "Is bc1q…  an active wallet, and does it hold any tokens?"
+```
+
+## Deploy the facilitator
 ```bash
 # set UNISAT_API_KEY, FEE_ADDRESS, JWT_SECRET, POSTGRES_PASSWORD in the environment / .env
-docker compose up -d          # postgres + facilitator (no private keys needed by the facilitator)
+docker compose up -d          # postgres + facilitator + dashboard (facilitator holds NO private keys)
 ```
-Put it behind HTTPS (Caddy/nginx) on a domain. The facilitator holds **no private keys** — only the
-UniSat key, your fee address, the JWT secret, and the DB.
+Put it behind HTTPS — the included `deploy/Caddyfile` does auto-HTTPS. Details in `deploy/DEPLOY.md`.
 
-## Integrate (provider)
-```ts
-import { requirePayment } from "os-x402/sdk/middleware";
-app.get("/my/endpoint",
-  requirePayment({ facilitatorUrl: "https://pay.example.com", apiKey: process.env.SVC_KEY!, price: 10_000 }),
-  (req, res) => res.json({ ... }));
-```
-
-## Roadmap
-- **Dashboard UI** (Next.js): self-serve signup, service + pricing config, earnings/usage charts.
-- Client SDKs: browser (UniSat wallet) + Python (AI/agent devs).
-- Prepaid-credits mode (opt-in) for sub-cent micro-calls; fee-rate oracle; UniSat retry/cache + own-node fallback; webhooks.
-- Publish as an `@x402/fb` scheme for the upstream x402 ecosystem.
+## Docs
+- [`VISION.md`](VISION.md) — what we're building, roadmap, why it deserves a grant.
+- [`SPEC.md`](SPEC.md) — the `fb-exact` x402 scheme (wire format + verification rules).
+- [`LICENSING.md`](LICENSING.md) — the open-core boundary: what's free vs the hosted business.
+- [`PUBLISHING.md`](PUBLISHING.md) — releasing the repo, npm SDK, and Python SDK.
+- [`USAGE.md`](USAGE.md) — operator / provider / consumer cookbook.
 
 ## License
-MIT. Built by [The Lonely Bit](https://thelonelybit.org).
+MIT — the protocol belongs to the ecosystem; the marketplace is the business ([`LICENSING.md`](LICENSING.md)).
+Built by [The Lonely Bit](https://thelonelybit.org). Keep upstream BTCPay/third-party notices intact.
