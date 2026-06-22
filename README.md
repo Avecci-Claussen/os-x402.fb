@@ -1,15 +1,24 @@
-# OS-x402 — the open payment rail & marketplace for agents on Fractal Bitcoin
+# x402.fb — the open payment rail for autonomous agents on Fractal Bitcoin
 
-**A multi-tenant, non-custodial pay-per-call payment rail for Fractal Bitcoin (FB).** Any API, AI
-endpoint, data feed, or agent service can charge **FB per request** over plain HTTP, using the
-[x402](https://github.com/coinbase/x402) `402 Payment Required` standard.
+![License: MIT](https://img.shields.io/badge/license-MIT-ff7a3c)
+![Chain](https://img.shields.io/badge/chain-Fractal%20Bitcoin-ff7a3c)
+![Protocol](https://img.shields.io/badge/protocol-x402%20·%20fb--exact-111)
+![Non-custodial](https://img.shields.io/badge/non--custodial-✓-4ec58a)
+![Mainnet](https://img.shields.io/badge/Fractal%20mainnet-proven-4ec58a)
+![PRs welcome](https://img.shields.io/badge/PRs-welcome-4ec58a)
 
-> 📖 **Read [`VISION.md`](VISION.md) first** — what we're building, the roadmap, the business model,
-> and why this deserves an ecosystem grant. Open core: **MIT protocol + SDKs (free, self-hostable)**
-> with a two-sided **marketplace** ([`marketplace/`](marketplace/)) as the business.
+**A non-custodial, pay-per-call payment rail for Fractal Bitcoin (FB).** Any API, AI endpoint, data
+feed, or agent service can charge **FB per request** over plain HTTP, using the
+[x402](https://github.com/coinbase/x402) `402 Payment Required` standard. AI agents can't fill in a
+signup form or a credit card — but they can pay a 10,000-sat invoice. This is the turnstile that lets
+software buy capabilities by itself.
 
-> **Status: working end-to-end on Fractal mainnet.** The full hosted-SaaS flow (signup → service →
-> agent pays a real FB call → verified → served → fee accounted) was proven on-chain
+> 📖 **New here? Read [`VISION.md`](VISION.md)** (what & why) and [`SPEC.md`](SPEC.md) (the `fb-exact`
+> wire format). Open core: **MIT protocol + SDKs + self-hostable facilitator** — free forever. See
+> [`LICENSING.md`](LICENSING.md) for what's open vs the hosted service.
+
+> **Status: proven end-to-end on Fractal mainnet.** The full flow (wallet sign-in → service → agent pays
+> a real FB call → verified on-chain → served → fee accounted) settled real transactions
 > (e.g. tx `bf8f37655ee8c3ee144440271ba7c4fdad058da5767d73617f7f6aac2eaeded5`).
 
 ## Why it's different
@@ -23,16 +32,50 @@ endpoint, data feed, or agent service can charge **FB per request** over plain H
   auto-pay a `402` and retry. General rail — AI is just one use case.
 
 ## Architecture
+
+```mermaid
+flowchart LR
+  agent([AI agent / app]):::ext
+  prov["Provider server<br/>requirePayment() · SDK<br/>holds only an API key"]:::prov
+  fac["x402.fb facilitator<br/>derive addr from xpub · verify · fees<br/>(holds NO private keys)"]:::fac
+  idx["Fractal indexer<br/>(UniSat Open API)"]:::ext
+  db[("Postgres<br/>services · payments")]:::db
+
+  agent -- "GET /endpoint" --> prov
+  prov -- "402 + requirements" --> agent
+  agent -- "1 FB tx: provider + fee" --> chain((Fractal Bitcoin)):::chain
+  agent -- "retry + txid" --> prov
+  prov -- "/v1/requirements · /v1/verify (x-api-key)" --> fac
+  fac --> db
+  fac -- "verify outputs on-chain" --> idx
+  idx -. "reads" .-> chain
+
+  classDef prov fill:#16110b,stroke:#ff7a3c,color:#fff;
+  classDef fac fill:#0e1014,stroke:#ff7a3c,color:#fff;
+  classDef ext fill:#101216,stroke:#555,color:#ddd;
+  classDef db fill:#101216,stroke:#4ec58a,color:#ddd;
+  classDef chain fill:#1a1206,stroke:#ffab63,color:#ffab63;
 ```
-            ┌─────────────── merchant's server ───────────────┐
-agent ──GET──▶  requirePayment() middleware (SDK, API key only)│
-   ▲        └──────────────┬───────────────────────────────────┘
-   │ 402 + requirements    │ /v1/requirements, /v1/verify  (x-api-key)
-   │ pay (2-output FB tx)   ▼
-   │              ┌──── os-x402 facilitator ────┐      ┌── UniSat Open API ──┐
-   └──retry+txid──▶  derive addr (xpub), verify, fees │──────▶  utxos / tx outs /  │
-                  │  Postgres: merchants/services/pay │      │  broadcast (FB)     │
-                  └───────────────────────────────────┘      └─────────────────────┘
+
+**The 402 handshake** — one ordered exchange, non-custodial throughout:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as Agent
+  participant P as Provider (SDK)
+  participant F as Facilitator
+  participant C as Fractal Bitcoin
+  A->>P: GET /v1/inference
+  P->>F: requirements(resource, price)
+  F-->>P: payTo (fresh addr from xpub), amount, fee, nonce
+  P-->>A: 402 Payment Required + requirements
+  A->>C: broadcast 1 tx → provider + facilitator fee
+  A->>P: retry with X-PAYMENT-TXID
+  P->>F: verify(nonce, txid)
+  F->>C: read tx outputs (via indexer)
+  F-->>P: ok — outputs match
+  P-->>A: 200 OK + result
 ```
 
 | Module | Role |
