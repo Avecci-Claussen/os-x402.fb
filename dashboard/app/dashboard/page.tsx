@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "../../lib/api";
 import { Header, Skeleton } from "../../components/ui";
+import { Reveal } from "../../components/Reveal";
 
 const fb = (s: number | string) => (Number(s) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 8 });
 // compact: 1234 -> 1.23K, 1_200_000 -> 1.2M (for the big stat band)
@@ -37,11 +38,13 @@ export default function Dashboard() {
           ["Volume", s30 ? `${compact(Number(s30.volume))} sat` : null, true],
           ["Unique buyers", s30 ? compact(s30.buyers) : null, false],
           ["Earned (all-time)", stats ? `${fb(stats.earned_to_merchant)} FB` : null, true],
-        ].map(([label, val, accent]) => (
-          <div className="card" key={label as string}>
-            <div className="label">{label as string}</div>
-            {val === null ? <Skeleton h={30} w={80} /> : <div className={`stat ${accent ? "accent" : ""}`}>{val as string}</div>}
-          </div>
+        ].map(([label, val, accent], i) => (
+          <Reveal key={label as string} dir={i % 2 ? "right" : "left"} delay={i * 70}>
+            <div className="card">
+              <div className="label">{label as string}</div>
+              {val === null ? <Skeleton h={30} w={80} /> : <div className={`stat ${accent ? "accent" : ""}`}>{val as string}</div>}
+            </div>
+          </Reveal>
         ))}
       </div>
 

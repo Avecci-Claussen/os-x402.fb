@@ -1,21 +1,24 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { BRAND } from "../lib/brand";
 import { logout } from "../lib/api";
+import { LangSwitcher } from "../lib/i18n";
+import { ThemeToggle } from "../lib/theme";
+import { Wordmark } from "./Logo";
 
 // Consistent top bar across authed pages.
 export function Header({ back }: { back?: { href: string; label: string } }) {
   return (
     <nav className="nav">
-      <Link className="brand" href="/dashboard"><span className="dot" />{BRAND.name}</Link>
+      <Link className="brand" href="/dashboard"><Wordmark /></Link>
       <div className="row">
         {back ? (
-          <Link className="btn btn-sm" href={back.href}>{back.label}</Link>
+          <><LangSwitcher /><ThemeToggle /><Link className="btn btn-sm" href={back.href}>{back.label}</Link></>
         ) : (
           <>
             <Link className="btn btn-sm" href="/dashboard/playground">Playground</Link>
             <Link className="btn btn-sm btn-primary" href="/dashboard/services/new">+ New service</Link>
+            <LangSwitcher /><ThemeToggle />
             <button className="btn btn-sm" onClick={logout}>Log out</button>
           </>
         )}
