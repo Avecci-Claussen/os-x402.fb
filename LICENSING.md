@@ -11,12 +11,11 @@ business.*
 Nobody pays Supabase, Sentry, PostHog, GitLab, or hosted BTCPay for *secrecy* — all of them are open
 source and fully self-hostable. People pay because **running and operating the thing yourself is more
 work than paying.** OS-x402 is the same: the protocol and SDKs are MIT and self-hostable forever; the
-**hosted facilitator and the marketplace network** are the product.
+**hosted facilitator and managed services** are the product.
 
-A *closed* payment SDK is a non-starter — especially in Bitcoin, nobody integrates a payment library
-they can't inspect. So the SDK and protocol **must** be open. Monetization that depended on the protocol
-being secret was never defensible anyway (it gets forked day one). We monetize **operation and network**,
-not secrecy.
+A payment SDK must be open — nobody integrates a payment library they can't inspect, least of all in
+Bitcoin. So the protocol and SDK are MIT by design. The value is in **operating the service**, not in
+withholding code.
 
 ## The boundary
 
@@ -28,24 +27,17 @@ not secrecy.
 | Core (scheme, tx build, on-chain verify, llm) | **MIT (open)** | `src/core/` | Just Bitcoin tx construction; no secret sauce exists here. |
 | Reference facilitator (self-host) | **MIT (open)** | `src/facilitator/` | Lets anyone self-host → makes us the standard. |
 | Merchant dashboard | **MIT (open)** | `dashboard/` | Convenience; not a moat. |
-| **Multi-tenant marketplace & discovery network** | **Hosted-only** | `marketplace/` (to build) | The network effect *is* the moat — operated, not protected. |
+| **Multi-tenant marketplace & discovery network** | **Hosted-only** | (separate, not in this repo) | The network effect is the value — operated, not protected. |
 | **Managed operations** | **Hosted / paid** | infra | Managed UniSat keys, uptime, analytics, fiat-pricing oracle, reputation/verified providers, rate limits, support. |
 
 **The line is not "secret vs public code." It is "code anyone can run" vs "a network and service only we
 operate."**
 
-## Why the hosted API key still gets paid for
+## What the hosted service offers
 
-Even with everything above open, a paying customer's API key to the **hosted facilitator** buys:
-
-- a maintained **UniSat indexer key** (costs money, rate-limited — we absorb it),
-- **zero ops**: no server, no Postgres, no uptime duty, no upgrades,
-- **the marketplace**: their endpoint is discoverable by agents (only exists on the hosted side),
-- (later) **fiat-denominated pricing**, **reputation**, **analytics**, **SLAs**.
-
-A solo dev with one paid endpoint uses the hosted key rather than stand up infrastructure. A high-volume
-provider may self-host to avoid the fee — **that is expected and fine**: we don't lose a customer we'd
-have monetized much, and they still speak our protocol, which grows the network we *do* monetize.
+Self-hosting is free and supported. The hosted facilitator exists for teams who'd rather not run
+infrastructure — it provides a maintained indexer connection, zero-ops uptime, and (over time) managed
+conveniences like analytics and fiat-denominated pricing. Self-hosters are first-class either way.
 
 ## Practical rules
 

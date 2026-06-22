@@ -12,3 +12,6 @@ __pycache__/
 .next/
 # os
 .DS_Store
+
+# private strategy + hosted-only marketplace (never publish)
+_private/
