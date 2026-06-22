@@ -1,0 +1,42 @@
+{
+  "name": "os-x402",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-tenant x402 pay-per-call payment rail for Fractal Bitcoin (FB) — non-custodial, agent-native.",
+  "license": "MIT",
+  "scripts": {
+    "facilitator": "tsx src/facilitator/server.ts",
+    "demo": "tsx src/examples/demo-server.ts",
+    "e2e": "tsx src/e2e/full.ts",
+    "e2e:ai": "tsx src/e2e/ai.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "@types/cors": "^2.8.19",
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "bip32": "^4.0.0",
+    "bip322-js": "^3.0.0",
+    "bip39": "^3.1.0",
+    "bitcoinjs-lib": "^6.1.6",
+    "bitcoinjs-message": "^2.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "ecpair": "^2.1.0",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.0",
+    "tiny-secp256k1": "^2.2.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.7.0",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.0"
+  }
+}

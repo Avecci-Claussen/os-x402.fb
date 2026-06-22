@@ -1,0 +1,10 @@
+# Caddy reverse proxy with automatic HTTPS for Turnpike (os-x402).
+# Point DNS A-records for both names at your server, then: caddy run --config Caddyfile
+
+pay.example.com {            # facilitator API
+    reverse_proxy 127.0.0.1:4040
+}
+
+app.example.com {            # dashboard
+    reverse_proxy 127.0.0.1:3000
+}

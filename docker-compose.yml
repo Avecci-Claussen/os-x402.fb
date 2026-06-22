@@ -1,0 +1,38 @@
+# Production facilitator + Postgres. Set secrets in .env (UNISAT_API_KEY, FEE_ADDRESS, JWT_SECRET).
+name: os-x402
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: x402
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-x402}
+      POSTGRES_DB: x402
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+
+  facilitator:
+    build: .
+    restart: unless-stopped
+    depends_on: [postgres]
+    environment:
+      DATABASE_URL: "postgres://x402:${POSTGRES_PASSWORD:-x402}@postgres:5432/x402"
+      UNISAT_API_KEY: ${UNISAT_API_KEY}
+      UNISAT_BASE: ${UNISAT_BASE:-https://open-api-fractal.unisat.io}
+      FEE_ADDRESS: ${FEE_ADDRESS}
+      FEE_RATE_SAT_VB: ${FEE_RATE_SAT_VB:-4}
+      FACILITATOR_PORT: "4040"
+      FACILITATOR_URL: ${FACILITATOR_URL:-http://127.0.0.1:4040}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "127.0.0.1:4040:4040"
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        NEXT_PUBLIC_FACILITATOR_URL: ${FACILITATOR_URL:-http://127.0.0.1:4040}
+    restart: unless-stopped
+    depends_on: [facilitator]
+    ports:
+      - "127.0.0.1:3000:3000"
