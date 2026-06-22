@@ -42,6 +42,6 @@ conveniences like analytics and fiat-denominated pricing. Self-hosters are first
 ## Practical rules
 
 - Keep BTCPay/upstream and third-party copyright notices intact (MIT obligation).
-- Anything in this repo is MIT. The marketplace/managed services are deliberately **not** in this repo.
+- Anything in this repo is MIT. The marketplace and managed services are deliberately **not** in this repo.
 - Self-hosters are welcome and encouraged — including publishing into the public marketplace, because
   more listings make the network stronger.
