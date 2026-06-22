@@ -13,9 +13,8 @@ feed, or agent service can charge **FB per request** over plain HTTP, using the
 signup form or a credit card — but they can pay a 10,000-sat invoice. This is the turnstile that lets
 software buy capabilities by itself.
 
-> 📖 **New here? Read [`VISION.md`](VISION.md)** (what & why) and [`SPEC.md`](SPEC.md) (the `fb-exact`
-> wire format). Open core: **MIT protocol + SDKs + self-hostable facilitator** — free forever. See
-> [`LICENSING.md`](LICENSING.md) for what's open vs the hosted service.
+> 📖 **The protocol is specified in [`SPEC.md`](SPEC.md)** (`fb-exact` wire format + verification).
+> MIT licensed — the protocol, SDKs, and facilitator are free and self-hostable.
 
 > **Status: proven end-to-end on Fractal mainnet.** The full flow (wallet sign-in → service → agent pays
 > a real FB call → verified on-chain → served → fee accounted) settled real transactions
@@ -133,12 +132,10 @@ docker compose up -d          # postgres + facilitator + dashboard (facilitator 
 Put it behind HTTPS — the included `deploy/Caddyfile` does auto-HTTPS. Details in `deploy/DEPLOY.md`.
 
 ## Docs
-- [`VISION.md`](VISION.md) — what we're building, roadmap, why it deserves a grant.
 - [`SPEC.md`](SPEC.md) — the `fb-exact` x402 scheme (wire format + verification rules).
-- [`LICENSING.md`](LICENSING.md) — the open-core boundary: what's free vs the hosted business.
+- [`USAGE.md`](USAGE.md) — provider / agent / operator cookbook.
 - [`PUBLISHING.md`](PUBLISHING.md) — releasing the repo, npm SDK, and Python SDK.
-- [`USAGE.md`](USAGE.md) — operator / provider / consumer cookbook.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup and ground rules.
 
 ## License
-MIT — the protocol belongs to the ecosystem; the marketplace is the business ([`LICENSING.md`](LICENSING.md)).
-Built by [The Lonely Bit](https://thelonelybit.org). Keep upstream BTCPay/third-party notices intact.
+MIT. Built by [The Lonely Bit](https://thelonelybit.org).

@@ -13,5 +13,5 @@ __pycache__/
 # os
 .DS_Store
 
-# private strategy + hosted-only marketplace (never publish)
+# local-only working files (never publish)
 _private/

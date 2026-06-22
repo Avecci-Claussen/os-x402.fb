@@ -29,4 +29,4 @@ Now: dashboard at `https://app.example.com`, facilitator at `https://pay.example
 - [ ] Back up the Postgres volume (`./pgdata`) — it holds merchants/services/payment history.
 - [ ] Monitor the facilitator (`/health`) and the UniSat API quota; add retry/cache (+ own-node fallback) for scale.
 - [ ] Consider requiring 1 confirmation for high-value calls (0-conf is fine for small ones).
-- [ ] Providers should use the hosted facilitator URL; self-hosters run it fee-free (open-core).
+- [ ] Point providers at your facilitator's HTTPS URL and issue each a service API key.

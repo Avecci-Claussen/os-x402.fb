@@ -31,7 +31,7 @@ curl -s localhost:4040/v1/services -H "authorization: Bearer $TOKEN" -H content-
 ```
 Payments derive from **your** xpub → funds land in **your** wallet. The operator never holds funds.
 
-## 2. Monetize an endpoint (provider, ~4 lines)
+## 2. Charge for an endpoint (provider, ~4 lines)
 ```ts
 import { requirePayment } from "os-x402/sdk/middleware";
 
@@ -73,9 +73,7 @@ Run the full mainnet demo: `npm run e2e` (boots facilitator → registers a serv
 FB call for `/tools/balance` → gets live data → facilitator records the fee).
 
 ## Notes
-- **Non-custodial**: one tx pays provider + operator fee; nobody holds funds. Operator fee is enforced
-  by the hosted facilitator (self-hosters can run fee-free — that's the open-core model).
-- **Pricing**: in FB (sats). Min fee is dust-safe (≥330 sats). Price calls in cents-and-up; sub-cent
-  micro-calls want the (future) prepaid-credits mode.
-- **0-conf**: payments verify on first sight via UniSat; require confirmations for high-value calls.
-- **Auth**: API keys for service integration; dashboard login via JWT today (wallet sign-in planned).
+- **Non-custodial**: one tx pays the provider plus the facilitator fee output; nobody holds funds.
+- **Pricing**: in FB (sats). The fee output is dust-safe (≥330 sats).
+- **Confirmations**: payments verify on first sight via the indexer; require a confirmation for high-value calls.
+- **Auth**: API keys for service integration; dashboard login via wallet signature (BIP322).
