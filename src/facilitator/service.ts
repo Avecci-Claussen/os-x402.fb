@@ -6,8 +6,11 @@ import { Verifier } from "bip322-js";
 import { pool } from "./db.js";
 import { cfg } from "../config.js";
 import { addressFromXpub } from "../core/fb.js";
-import { getTxOuts } from "../core/unisat.js";
+import { getTxOuts, getTxConfirmations, resolveFeeRateSatVb } from "../core/unisat.js";
 import { buildUnsignedPsbtHex, type PaymentRequirements } from "../core/scheme.js";
+import { paymentBinding } from "../core/types.js";
+import { assertRawTxPaysRequirements, assertPsbtPaysRequirements } from "../core/psbt-verify.js";
+import * as bitcoin from "bitcoinjs-lib";
 
 const sign = (merchantId: string) => jwt.sign({ merchantId }, cfg.jwtSecret, { expiresIn: "7d" });
 export const verifyToken = (token: string): string => (jwt.verify(token, cfg.jwtSecret) as any).merchantId;
@@ -42,6 +45,12 @@ export async function walletLogin(address: string, signature: string) {
     `insert into merchants(address) values($1) on conflict (address) do update set address=excluded.address returning id,address`,
     [address]);
   return { token: sign(m.rows[0].id), merchant: m.rows[0] };
+}
+
+export async function getMerchant(merchantId: string) {
+  const r = await pool.query(`select id, address from merchants where id=$1`, [merchantId]);
+  if (!r.rows[0]) throw new Error("merchant not found");
+  return r.rows[0];
 }
 
 export async function createService(merchantId: string, name: string, xpub: string, feeBps = 1000) {
@@ -94,13 +103,18 @@ export async function createRequirement(apiKey: string, resource: string, price:
   const nonce = crypto.randomBytes(8).toString("hex");
   const DUST = 330; // outputs below dust are rejected by the network on fee-paying txs
   const fee = Math.max(DUST, Math.floor((price * svc.fee_bps) / 10000));
+  const binding = crypto.createHash("sha256")
+    .update(paymentBinding({ resource, amount: price, payTo, feeAmount: fee, feeAddress: cfg.feeAddress }))
+    .digest("hex");
+  const confirmations = price >= cfg.highValueSats ? cfg.confirmationsHigh : cfg.confirmationsDefault;
   await pool.query(
-    `insert into payments(service_id,nonce,resource,pay_to,amount,fee_amount,fee_address) values($1,$2,$3,$4,$5,$6,$7)`,
-    [svc.id, nonce, resource, payTo, price, fee, cfg.feeAddress]);
+    `insert into payments(service_id,nonce,resource,pay_to,amount,fee_amount,fee_address,binding) values($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [svc.id, nonce, resource, payTo, price, fee, cfg.feeAddress, binding]);
   return {
     scheme: "fb-exact", asset: "FB", network: "fractal-mainnet",
     payTo, amount: price, facilitatorFee: { payTo: cfg.feeAddress, amount: fee },
     resource, nonce, expiresAt: Date.now() + 10 * 60_000,
+    binding, confirmations,
   };
 }
 
@@ -110,25 +124,96 @@ export async function buildPayment(nonce: string, payerAddress: string) {
   if (!p) throw new Error("unknown nonce");
   if (!payerAddress) throw new Error("payerAddress required");
   await pool.query(`update payments set payer=$1 where nonce=$2 and payer is null`, [payerAddress, nonce]);
-  const feeRate = Number(process.env.FEE_RATE_SAT_VB || "4");
+  const feeRate = await resolveFeeRateSatVb();
   const psbtHex = await buildUnsignedPsbtHex(payerAddress, p.pay_to, Number(p.amount), p.fee_address, Number(p.fee_amount), feeRate);
-  return { psbtHex };
+  return { psbtHex, feeRateSatVb: feeRate };
 }
 
-export async function verifyPayment(apiKey: string, nonce: string, txid: string, payer?: string) {
+export interface VerifyOpts {
+  payer?: string;
+  rawTx?: string;
+  signedPsbt?: string;
+  /** Must match the protected request (stops cross-endpoint replay of the same nonce/txid). */
+  resource?: string;
+  binding?: string;
+}
+
+export async function verifyPayment(apiKey: string, nonce: string, txid: string, opts: VerifyOpts | string = {}) {
+  // Back-compat: older callers passed payer as 4th arg
+  const o: VerifyOpts = typeof opts === "string" ? { payer: opts } : (opts || {});
   const svc = await serviceByApiKey(apiKey);
   if (!svc) throw new Error("invalid service api key");
   const p = (await pool.query(`select * from payments where nonce=$1 and service_id=$2`, [nonce, svc.id])).rows[0];
   if (!p) return { ok: false, status: "unknown" };
-  if (p.status === "paid") return { ok: true, status: "paid", txid: p.txid };
-  const outs = await getTxOuts(txid);
-  if (!outs) return { ok: false, status: "pending" };
-  const merchantPaid = outs.some((o) => o.address === p.pay_to && o.satoshi >= Number(p.amount));
-  const feePaid = outs.some((o) => o.address === p.fee_address && o.satoshi >= Number(p.fee_amount));
-  if (!merchantPaid || !feePaid) return { ok: false, status: "invalid" };
-  await pool.query(`update payments set status='paid', txid=$1, paid_at=now(), payer=coalesce(payer,$3) where id=$2`,
-    [txid, p.id, payer || null]);
-  return { ok: true, status: "paid", txid };
+  if (p.status === "paid") return { ok: true, status: "paid", txid: p.txid, binding: p.binding, verified: "cached" };
+
+  // Request binding: payment is locked to the resource that issued the 402.
+  if (o.resource && o.resource !== p.resource) return { ok: false, status: "binding_mismatch" };
+  const expectedBinding = p.binding || crypto.createHash("sha256")
+    .update(paymentBinding({
+      resource: p.resource, amount: Number(p.amount), payTo: p.pay_to,
+      feeAmount: Number(p.fee_amount), feeAddress: p.fee_address,
+    })).digest("hex");
+  if (o.binding && o.binding !== expectedBinding) return { ok: false, status: "binding_mismatch" };
+
+  const reqr = {
+    payTo: p.pay_to, amount: Number(p.amount),
+    facilitatorFee: { payTo: p.fee_address, amount: Number(p.fee_amount) },
+  };
+
+  let verified: "rawTx" | "unisat" = "unisat";
+  let localOk = false;
+  let rawTx = o.rawTx?.replace(/^0x/i, "").trim() || "";
+  if (!rawTx && o.signedPsbt) {
+    try {
+      const psbt = bitcoin.Psbt.fromHex(o.signedPsbt.replace(/^0x/i, ""));
+      try { rawTx = psbt.extractTransaction().toHex(); }
+      catch {
+        assertPsbtPaysRequirements(o.signedPsbt, reqr);
+        localOk = true;
+        verified = "rawTx";
+      }
+    } catch {
+      return { ok: false, status: "invalid" };
+    }
+  }
+
+  if (rawTx) {
+    try {
+      assertRawTxPaysRequirements(rawTx, reqr);
+      verified = "rawTx";
+      localOk = true;
+    } catch {
+      return { ok: false, status: "invalid" };
+    }
+  } else if (!localOk) {
+    // UniSat outs = fallback only when client did not supply rawTx / signedPsbt
+    const outs = await getTxOuts(txid);
+    if (!outs) return { ok: false, status: "pending" };
+    const merchantPaid = outs.some((x) => x.address === p.pay_to && x.satoshi >= Number(p.amount));
+    const feePaid = outs.some((x) => x.address === p.fee_address && x.satoshi >= Number(p.fee_amount));
+    if (!merchantPaid || !feePaid) return { ok: false, status: "invalid" };
+  }
+
+  const needConfs = Number(p.amount) >= cfg.highValueSats ? cfg.confirmationsHigh : cfg.confirmationsDefault;
+  if (needConfs > 0) {
+    const confs = await getTxConfirmations(txid);
+    if (confs == null) return { ok: false, status: "pending", confirmations: null, required: needConfs };
+    if (confs < needConfs) return { ok: false, status: "pending", confirmations: confs, required: needConfs };
+  }
+
+  try {
+    await pool.query(
+      `update payments set status='paid', txid=$1, paid_at=now(), payer=coalesce(payer,$3), binding=coalesce(binding,$4)
+       where id=$2 and status<>'paid'`,
+      [txid, p.id, o.payer || null, expectedBinding]);
+  } catch (e: any) {
+    // Unique txid: same chain tx cannot settle two nonces
+    if (String(e?.message || e).includes("payments_txid_unique") || e?.code === "23505")
+      return { ok: false, status: "replay" };
+    throw e;
+  }
+  return { ok: true, status: "paid", txid, binding: expectedBinding, verified };
 }
 
 export const stats = async (merchantId: string) => (await pool.query(`

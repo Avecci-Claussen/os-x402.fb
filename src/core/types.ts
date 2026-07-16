@@ -17,4 +17,15 @@ export interface PaymentRequirements {
   resource: string;     // the path being purchased
   nonce: string;        // one-time ticket binding this payment to this request
   expiresAt: number;    // epoch ms
+  /** sha256 hex binding resource+amount+payTo+fee — reject settle if mismatched */
+  binding?: string;
+  /** confirmations required before unlock (0 = mempool/seen outs ok) */
+  confirmations?: number;
+}
+
+/** Canonical request binding preimage for fb-exact (BSV-inspired). */
+export function paymentBinding(parts: {
+  resource: string; amount: number; payTo: string; feeAmount: number; feeAddress: string;
+}): string {
+  return `fb-exact|${parts.resource}|${parts.amount}|${parts.payTo}|${parts.feeAmount}|${parts.feeAddress}`;
 }

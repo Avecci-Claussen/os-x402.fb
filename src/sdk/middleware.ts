@@ -10,6 +10,9 @@ export function requirePayment(opts: RequirePaymentOpts) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const nonce = req.header("X-PAYMENT-NONCE");
     const txid = req.header("X-PAYMENT-TXID");
+    const rawTx = req.header("X-PAYMENT-RAWTX") || undefined;
+    const signedPsbt = req.header("X-PAYMENT-PSBT") || undefined;
+    const binding = req.header("X-PAYMENT-BINDING") || undefined;
     if (!nonce || !txid) {
       const r = await http.post("/v1/requirements", { resource: req.originalUrl, price: opts.price });
       res.status(402).json({ x402Version: 1, error: "payment required", accepts: [r.data] });
@@ -17,12 +20,18 @@ export function requirePayment(opts: RequirePaymentOpts) {
     }
     let result: any = { ok: false, status: "pending" };
     for (let i = 0; i < 50; i++) {
-      result = (await http.post("/v1/verify", { nonce, txid })).data;
+      result = (await http.post("/v1/verify", {
+        nonce, txid, rawTx, signedPsbt, binding,
+        resource: req.originalUrl,
+        payer: req.header("X-PAYMENT-PAYER") || undefined,
+      })).data;
       if (result.ok || result.status !== "pending") break;
       await new Promise((r) => setTimeout(r, 3000));
     }
     if (!result.ok) { res.status(402).json({ error: "payment invalid", status: result.status }); return; }
     res.setHeader("X-PAYMENT-CONFIRMED", txid);
+    if (result.binding) res.setHeader("X-PAYMENT-BINDING", result.binding);
+    if (result.verified) res.setHeader("X-PAYMENT-VERIFIED", result.verified);
     next();
   };
 }

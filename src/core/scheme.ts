@@ -2,6 +2,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPair, FB_NETWORK } from "./fb.js";
 import { getCardinalUtxos, broadcast } from "./unisat.js";
+import { assertPsbtPaysRequirements } from "./psbt-verify.js";
 import type { PaymentRequirements } from "./types.js";
 
 export type { PaymentRequirements } from "./types.js";
@@ -32,10 +33,12 @@ export async function buildUnsignedPsbtHex(
   return psbt.toHex();
 }
 
+export interface BroadcastResult { txid: string; rawTx: string; }
+
 // Build, sign and broadcast ONE FB tx with two payment outputs (merchant + facilitator fee) + change.
 export async function buildAndBroadcastPayment(
   reqr: PaymentRequirements, payerWif: string, payerAddress: string, feeRate: number,
-): Promise<string> {
+): Promise<BroadcastResult> {
   const keyPair = ECPair.fromWIF(payerWif, FB_NETWORK);
   const utxos = await getCardinalUtxos(payerAddress);
   if (!utxos.length) throw new Error("no cardinal (non-inscription) UTXOs to spend");
@@ -55,7 +58,11 @@ export async function buildAndBroadcastPayment(
   psbt.addOutput({ address: reqr.payTo, value: reqr.amount });
   psbt.addOutput({ address: reqr.facilitatorFee.payTo, value: reqr.facilitatorFee.amount });
   if (change >= DUST) psbt.addOutput({ address: payerAddress, value: change });
+  // never sign/broadcast a tx that doesn't pay exactly what the 402 asked (anti-misdirection)
+  assertPsbtPaysRequirements(psbt.toHex(), reqr);
   for (let i = 0; i < count; i++) psbt.signInput(i, keyPair);
   psbt.finalizeAllInputs();
-  return broadcast(psbt.extractTransaction().toHex());
+  const rawTx = psbt.extractTransaction().toHex();
+  const txid = await broadcast(rawTx);
+  return { txid, rawTx };
 }

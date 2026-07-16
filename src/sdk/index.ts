@@ -5,4 +5,7 @@
 // no node, no database. The facilitator (hosted or self-run) does the on-chain work.
 export { requirePayment } from "./middleware.js";
 export type { RequirePaymentOpts } from "./middleware.js";
+export { payAndFetch } from "./agent.js";
+export type { PayOpts } from "./agent.js";
 export type { PaymentRequirements, FacilitatorFee } from "../core/types.js";
+

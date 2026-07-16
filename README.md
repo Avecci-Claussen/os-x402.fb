@@ -20,6 +20,14 @@ software buy capabilities by itself.
 > a real FB call → verified on-chain → served → fee accounted) settled real transactions
 > (e.g. tx `bf8f37655ee8c3ee144440271ba7c4fdad058da5767d73617f7f6aac2eaeded5`).
 
+### What's new in 0.3
+- Prefer **`X-PAYMENT-RAWTX`** — facilitator verifies 2-output settlement locally (indexer outs = fallback)
+- **`binding`** on 402 accepts[] — locks payment to the resource + amounts
+- Agent SDK spend caps + returns `{ txid, rawTx, binding }`
+- `GET /v1/price/fb` (FB/USDT ≈ USD display) · `GET /v1/scheme/fb-exact`
+- Dynamic fee rates · confirmation policy for high-value calls
+- Helmet + rate limits · agent-kit (MCP / Claude / OpenClaw)
+
 ## Why it's different
 - **Non-custodial, earn-per-call.** Every paid request settles in **one FB transaction with two
   outputs** — the merchant's address **+** a small facilitator fee. The operator never holds funds (no
@@ -70,29 +78,31 @@ sequenceDiagram
   F-->>P: payTo (fresh addr from xpub), amount, fee, nonce
   P-->>A: 402 Payment Required + requirements
   A->>C: broadcast 1 tx → provider + facilitator fee
-  A->>P: retry with X-PAYMENT-TXID
-  P->>F: verify(nonce, txid)
-  F->>C: read tx outputs (via indexer)
+  A->>P: retry with nonce · txid · rawTx · binding
+  P->>F: verify(nonce, txid, rawTx, binding)
+  F->>F: local out check from rawTx (preferred)
   F-->>P: ok — outputs match
   P-->>A: 200 OK + result
 ```
 
 | Module | Role |
 |---|---|
-| `src/core/*` | FB wallet (FB=BTC params), UniSat client (cardinal-UTXO-safe), `fb-exact` scheme + 2-output tx builder |
-| `src/facilitator/*` | Postgres-backed multi-tenant service: auth, services, requirement issuance, verification, fee accounting |
+| `src/core/*` | FB wallet, UniSat client, `fb-exact` scheme, PSBT/rawTx local verify, FB/USDT display price |
+| `src/facilitator/*` | Postgres multi-tenant service: auth, services, requirements, verify, build-payment |
 | `src/sdk/middleware.ts` | provider drop-in — `requirePayment({ facilitatorUrl, apiKey, price })` |
-| `src/sdk/agent.ts` | consumer/agent — `payAndFetch(url)` auto-pays a 402 |
+| `src/sdk/agent.ts` | consumer/agent — `payAndFetch(url, { maxAmountSats })` auto-pays a 402 with rawTx |
+| `agent-kit/` | MCP · Claude skill · OpenClaw wrapper |
 | `src/examples/demo-server.ts` | example provider API (paywalled data + metered AI) |
 | `src/e2e/full.ts` | full mainnet SaaS test |
 
 ## API (facilitator)
-**Dashboard / management (JWT):**
-`POST /v1/auth/register` · `POST /v1/auth/login` · `POST /v1/services {name,xpub,feeBps}` ·
-`GET /v1/services` · `GET /v1/services/:id/payments` · `GET /v1/stats`
+**Dashboard / management (JWT / UniSat BIP322):**
+`POST /v1/auth/challenge` · `POST /v1/auth/wallet` · `GET /v1/auth/me` ·
+`POST /v1/services {name,xpub,feeBps}` · `GET /v1/services` · `GET /v1/services/:id/payments` · `GET /v1/stats`
 **Provider integration (header `x-api-key`):**
-`POST /v1/requirements {resource,price}` → payment requirements · `POST /v1/verify {nonce,txid}` → status
-
+`POST /v1/requirements {resource,price}` · `POST /v1/verify {nonce,txid,rawTx?,binding?}` · `POST /v1/build-payment`
+**Public helpers:**
+`GET /v1/price/fb` · `GET /v1/scheme/fb-exact` · `GET /v1/ecosystem`
 ## Integrate as a provider (the SDK)
 ```bash
 npm install os-x402

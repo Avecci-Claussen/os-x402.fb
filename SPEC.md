@@ -74,9 +74,17 @@ transaction is cryptographically bound to exactly one requirement.
 The caller retries the original request with headers:
 
 ```
-X-PAYMENT-NONCE: <nonce>
-X-PAYMENT-TXID:  <broadcast txid>
+X-PAYMENT-NONCE:   <nonce>
+X-PAYMENT-TXID:    <broadcast txid>
+X-PAYMENT-RAWTX:   <raw transaction hex>     # RECOMMENDED — enables local out verification
+X-PAYMENT-BINDING: <binding>                 # when present on the 402 accepts[] entry
 ```
+
+`X-PAYMENT-RAWTX` is preferred: the facilitator can parse outputs locally and verify the 2-output
+settlement without trusting indexer outs JSON alone. UniSat outs lookup remains a fallback.
+
+When the 402 `accepts[]` entry includes `binding`, the client MUST echo it on retry. Binding locks the
+requirement to the resource + amounts so a nonce cannot be replayed against a different call.
 
 ## 5. Verification (server / facilitator)
 
@@ -84,19 +92,20 @@ The verifier:
 
 1. Looks up the requirement by `nonce`. If unknown or expired → reject.
 2. If already settled → return success (idempotent; replay-safe).
-3. Fetches the transaction `txid`'s outputs from a Fractal indexer.
-4. Confirms an output pays `payTo` with `>= amount` **AND** an output pays `facilitatorFee.payTo` with
+3. If `binding` was issued, require a matching `X-PAYMENT-BINDING` / body `binding`.
+4. Prefer verifying from `rawTx` (local parse of outs). Else fetch `txid` outs from a Fractal indexer.
+5. Confirms an output pays `payTo` with `>= amount` **AND** an output pays `facilitatorFee.payTo` with
    `>= facilitatorFee.amount`. If either is missing → reject.
-5. On success, mark the requirement settled with `txid` and serve the resource.
+6. Optionally enforce confirmation depth for high-value amounts.
+7. On success, mark the requirement settled with `txid` and serve the resource.
 
-### 5.1 Hardening (RECOMMENDED for production — not all enforced in the v1 reference impl)
+### 5.1 Hardening (production)
 
-- **Confirmation depth:** require ≥1 confirmation before settling (Fractal's ~30s blocks make this cheap).
-  The v1 reference relies on indexer visibility and does not enforce an explicit depth — a known gap.
-- **Single-oracle risk:** the reference verifies via one indexer (UniSat). Production SHOULD cross-check
-  or run its own node.
+- **Local rawTx verify:** prefer `X-PAYMENT-RAWTX` so settlement outs are checked without a sole indexer oracle.
+- **Confirmation depth:** configurable (`CONFIRMATIONS_DEFAULT` / `CONFIRMATIONS_HIGH` / `HIGH_VALUE_SATS`).
+- **Binding:** request-lock on every 402 so nonce+payment cannot be redirected to another resource.
 - **Amount/expiry:** enforce `expiresAt`; treat `>= amount` (overpayment allowed, underpayment rejected).
-- **Rate limiting / abuse** on requirement issuance.
+- **Rate limiting / abuse** on auth and requirement issuance.
 
 ## 6. Non-custodial guarantee
 

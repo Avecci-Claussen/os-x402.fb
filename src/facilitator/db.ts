@@ -43,5 +43,7 @@ export async function initDb() {
       paid_at timestamptz
     );
     alter table payments add column if not exists payer text;
+    alter table payments add column if not exists binding text;
+    create unique index if not exists payments_txid_unique on payments(txid) where txid is not null and status='paid';
   `);
 }

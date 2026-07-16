@@ -11,5 +11,13 @@
     "rootDir": "src",
     "types": ["node"]
   },
-  "include": ["src/sdk/index.ts", "src/sdk/middleware.ts", "src/core/types.ts"]
+  "include": [
+    "src/sdk/**/*.ts",
+    "src/core/types.ts",
+    "src/core/scheme.ts",
+    "src/core/fb.ts",
+    "src/core/unisat.ts",
+    "src/core/psbt-verify.ts",
+    "src/config.ts"
+  ]
 }
